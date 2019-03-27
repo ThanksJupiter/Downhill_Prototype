@@ -2,11 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody))]
 public class Player : MonoBehaviour
 {
-    Rigidbody rb;
-
     public PlayerCollisionSphere collisionSphere;
 
     float horizontalRotation;
@@ -26,7 +23,7 @@ public class Player : MonoBehaviour
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
+
     }
 
     void Start()
@@ -46,12 +43,9 @@ public class Player : MonoBehaviour
         if (horizontalRotation != 0)
         {
             Vector3 eulerAngleVelocity = new Vector3(0f, horizontalRotation * rotationSpeed, 0f);
-            Quaternion deltaRotation = Quaternion.Euler(eulerAngleVelocity * Time.deltaTime);
+            Quaternion deltaRotation = Quaternion.Euler(transform.rotation.eulerAngles + eulerAngleVelocity * Time.deltaTime);
 
-            // why pls
-            //transform.SetPositionAndRotation(transform.position, deltaRotation);
-
-            rb.MoveRotation(rb.rotation * deltaRotation);
+            transform.SetPositionAndRotation(transform.position, deltaRotation);
         }
 
         if (verticalInput != 0)
