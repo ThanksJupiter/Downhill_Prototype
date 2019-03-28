@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class CharacterController : MonoBehaviour
 {
@@ -21,73 +19,119 @@ public class CharacterController : MonoBehaviour
     [SerializeField] private Vector2 inputVector;
 
     [SerializeField] private Vector3 projectedVector;
+    [SerializeField] private Vector3 desiredTravelDirection;
 
     [Range(0, 1)]
     public float alpha;
 
-    // Start is called before the first frame update
-    void Start()
-    {
+    delegate void OnLandedDelegate();
+    OnLandedDelegate OnLanded;
+    bool isGrounded;
 
+    private void OnEnable()
+    {
+        OnLanded += BroadcastLanded;
     }
 
-    // Update is called once per frame
+    private void OnDisable()
+    {
+        OnLanded -= BroadcastLanded;
+    }
+
     void Update()
     {
         // TODO set tilt float
         inputVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
 
-        Vector3 groundCheckDirection = -transform.up * checkGroundDistance;
-
-        //if (IsGrounded())
-        //    velocity *= -friction;
+        CheckGround();
+        
 
         RaycastHit hit;
-        if (Physics.Raycast(transform.position, groundCheckDirection.normalized, out hit, checkGroundDistance))
+        if (Physics.Raycast(transform.position, -transform.up, out hit, checkGroundDistance))
         {
-            projectedVector = Vector3.ProjectOnPlane(groundCheckDirection, hit.normal);
-            Vector3 flatProject = projectedVector;
-            flatProject.y = 0;
-            float forwardDot = Vector3.Dot(flatProject.normalized, transform.forward);
-
-            //velocity = Vector3.Lerp(transform.forward, projectedVector.normalized, forwardDot);
-
-            velocity = projectedVector * forwardDot * speedMultiplier;
-            velocity = Quaternion.AngleAxis(inputVector.x * rotationSpeed, transform.up) * velocity;
-
-            //velocity *= /*projectedVector.magnitude **/ forwardDot * speedMultiplier;
-            
-
-            print("forwardDot: " + forwardDot + " projVel.y: " + projectedVector.y);
+            if (isGrounded)
+            {
+                velocity.y = 0;
+            }
+            CalculateDesiredTravelDirection(hit);
+            velocityMagnitude = velocity.magnitude;
         }
         else
         {
             velocity.y += gravity * Time.deltaTime;
         }
 
+        transform.rotation = CalculateRotation();
+        transform.position += CalculateVelocity();
+    }
+
+    private Vector3 CalculateVelocity()
+    {
+        velocity += desiredTravelDirection * Time.deltaTime;
+        return velocity;
+    }
+
+    private void CalculateDesiredTravelDirection(RaycastHit hit)
+    {
+        Vector3 groundCheckDirection = -transform.up * checkGroundDistance;
+        bool facingUp = false;
+
+        projectedVector = Vector3.ProjectOnPlane(groundCheckDirection, hit.normal);
+        Vector3 flatProject = projectedVector;
+        flatProject.y = 0;
+        float forwardDot = Vector3.Dot(flatProject.normalized, transform.forward);
+        float rightDot = Vector3.Dot(flatProject.normalized, transform.right);
+
+        facingUp = forwardDot < 0;
+
+        desiredTravelDirection = new Vector3(transform.forward.x * projectedVector.x, projectedVector.y * forwardDot, transform.forward.z * projectedVector.z);
+        desiredTravelDirection = Quaternion.AngleAxis(rightDot * -Mathf.Rad2Deg, hit.normal) * desiredTravelDirection;
+
+        if (facingUp)
+        {
+            desiredTravelDirection = Quaternion.AngleAxis(180, projectedVector) * -desiredTravelDirection;
+        }
+
+        desiredTravelDirection.Normalize();
+    }
+
+    private Quaternion CalculateRotation()
+    {
         float theRightDot = Vector3.Dot(transform.right, velocity);
 
         Vector3 eulerAngleVelocity = new Vector3(0f, inputVector.x * rotationSpeed, 0f);
         Quaternion deltaRotation = Quaternion.Euler(transform.rotation.eulerAngles + eulerAngleVelocity * Time.deltaTime);
 
-        velocityMagnitude = velocity.magnitude;
-        transform.rotation = deltaRotation;
-        transform.position += velocity * Time.deltaTime;
+        return deltaRotation;
     }
 
-    bool IsGrounded()
+    private void CheckGround()
     {
-        return Physics.Raycast(transform.position, -transform.up, checkGroundDistance);
+        if (!isGrounded && Physics.Raycast(transform.position, -transform.up, checkGroundDistance))
+        {
+            OnLanded?.Invoke();
+        }
+
+        isGrounded = Physics.Raycast(transform.position, -transform.up, checkGroundDistance);
+    }
+
+    private void BroadcastLanded()
+    {
+        print("OnLanded invoke");
     }
 
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.green;
+        Gizmos.color = Color.blue;
         Gizmos.DrawLine(transform.position, transform.position + projectedVector * 10f);
-        Gizmos.DrawWireSphere(transform.position + projectedVector * 10f, .3f);
+        Gizmos.DrawWireSphere(transform.position + projectedVector * 10f, .2f);
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(transform.position, transform.position + desiredTravelDirection * 5f);
+        Gizmos.DrawWireSphere(transform.position + desiredTravelDirection * 5f, .3f);
 
         Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, transform.position + velocity * 10f);
-        Gizmos.DrawWireSphere(transform.position + velocity * 10f, .3f);
+        Gizmos.DrawLine(transform.position, transform.position + velocity);
+        Gizmos.DrawWireSphere(transform.position + velocity, .4f);
     }
 }
