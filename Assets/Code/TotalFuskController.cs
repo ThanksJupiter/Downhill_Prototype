@@ -5,6 +5,8 @@ public class TotalFuskController : MonoBehaviour
     #region Properties
     [Header("Settings")]
     [SerializeField] private float speedMultiplier = 5f;
+    [SerializeField] private float brakeMultiplier = 10f;
+    [SerializeField] private float brakeThreshold = .5f;
     [SerializeField] private float boardRotationSpeed = 1000f;
     [SerializeField] private float travelDirectionLerpSpeed = 200f;
     [SerializeField] private float startTravelThreshold = .2f;
@@ -29,8 +31,10 @@ public class TotalFuskController : MonoBehaviour
     [SerializeField] private float currentSlopeAngle;
 
     [SerializeField] private float faceTowardSlopeAmount;
+    [SerializeField] private float faceTowardsTravelDirectionAmount;
 
     [SerializeField] private bool isGrounded;
+    [SerializeField] private bool isBreaking;
 
     #region Delegates
     delegate void OnLandedDelegate();
@@ -70,10 +74,10 @@ public class TotalFuskController : MonoBehaviour
 
     void Update()
     {
-        if (velocityMagnitude < stationaryVelocityThreshold)
+        /*if (velocityMagnitude < stationaryVelocityThreshold)
         {
             EnterStationaryState();
-        }/* else if (currentState == State.Stationary && velocityMagnitude > stationaryVelocityThreshold)
+        }*//* else if (currentState == State.Stationary && velocityMagnitude > stationaryVelocityThreshold)
         {
             currentState = State.Travel;
         }*/
@@ -83,7 +87,6 @@ public class TotalFuskController : MonoBehaviour
         inputVector = new Vector3(Input.GetAxis("Horizontal"), 0f, Input.GetAxis("Vertical"));
         inputVector.Normalize();
 
-        print(currentState);
         switch (currentState)
         {
             case State.Travel:
@@ -139,7 +142,7 @@ public class TotalFuskController : MonoBehaviour
     private void ExecuteTravelState()
     {
         RotateBoard();
-        print("Execute travel state");
+        //print("Execute travel state");
         RaycastHit hit;
         if (Physics.Raycast(transform.position + horizontalTravelDirection * velocityMagnitude * Time.deltaTime, -transform.up, out hit, checkGroundDownDistance))
         {
@@ -151,13 +154,28 @@ public class TotalFuskController : MonoBehaviour
             horizontalTravelDirection.y = 0f;
             horizontalTravelDirection.Normalize();
 
-            faceTowardSlopeAmount = Vector3.Dot(boardDirection, flatSlopeDirection);
-            velocityMagnitude += speedMultiplier * Time.deltaTime * faceTowardSlopeAmount;
-            print(velocityMagnitude);
+            faceTowardsTravelDirectionAmount = Vector3.Dot(boardDirection, horizontalTravelDirection);
+            isBreaking = Mathf.Abs(faceTowardsTravelDirectionAmount) < brakeThreshold;
 
-            horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, boardDirection, travelDirectionLerpSpeed * Time.deltaTime);
+            faceTowardSlopeAmount = Vector3.Dot(boardDirection.normalized, flatSlopeDirection.normalized);
+
+            if (!isBreaking)
+            {
+                velocityMagnitude += speedMultiplier * Time.deltaTime * faceTowardSlopeAmount;
+                horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, boardDirection, travelDirectionLerpSpeed * Time.deltaTime);
+            }
+            else
+            {
+                velocityMagnitude -= brakeMultiplier * Time.deltaTime;
+                horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, flatSlopeDirection, travelDirectionLerpSpeed * Time.deltaTime);
+            }
         }
 
+        if (velocityMagnitude < stationaryVelocityThreshold && Mathf.Abs(faceTowardSlopeAmount) < stationaryVelocityThreshold ) 
+        {
+            EnterStationaryState();
+            return;
+        }
 
         transform.position = hit.point + transform.up * 1f;
     }
@@ -169,7 +187,7 @@ public class TotalFuskController : MonoBehaviour
         Vector3 flatSlopeDirection = new Vector3(currentSlopeDirection.x, 0f, currentSlopeDirection.z);
         faceTowardSlopeAmount = Vector3.Dot(boardDirection, flatSlopeDirection);
 
-        if (Mathf.Abs(faceTowardSlopeAmount) > startTravelThreshold)
+        if (Mathf.Abs(faceTowardSlopeAmount) > startTravelThreshold && Input.GetButtonDown("Fire1"))
         {
             EnterTravelState();
         }
@@ -177,12 +195,32 @@ public class TotalFuskController : MonoBehaviour
 
     private void EnterTravelState()
     {
+        /*print("Entered: " + currentState);*/
         currentState = State.Travel;
+        RaycastHit hit;
+        if (Physics.Raycast(transform.position + horizontalTravelDirection * velocityMagnitude * Time.deltaTime, -transform.up, out hit, checkGroundDownDistance))
+        {
+            currentSlopeDirection = Vector3.ProjectOnPlane(-transform.up, hit.normal);
+            Vector3 flatSlopeDirection = new Vector3(currentSlopeDirection.x, 0f, currentSlopeDirection.z);
+            currentSlopeAngle = Vector3.Angle(currentSlopeDirection, flatSlopeDirection);
+
+            horizontalTravelDirection = hit.point - transform.position;
+            horizontalTravelDirection.y = 0f;
+            horizontalTravelDirection.Normalize();
+
+            faceTowardsTravelDirectionAmount = Vector3.Dot(boardDirection, horizontalTravelDirection);
+            isBreaking = Mathf.Abs(faceTowardsTravelDirectionAmount) < brakeThreshold;
+
+            faceTowardSlopeAmount = Vector3.Dot(boardDirection.normalized, flatSlopeDirection.normalized);
+        }
+
         horizontalTravelDirection = boardDirection;// * forwards/backwards inverted special variable 
+        velocityMagnitude = 2f;
     }
 
     private void EnterStationaryState()
     {
+/*        print("Entered: " + currentState);*/
         currentState = State.Stationary;
     }
     #endregion State functions
