@@ -46,17 +46,12 @@ public class TheFuskestController : MonoBehaviour
         speedUpAmount = SpeedUp();
         slowDownAmount = SlowDown();
 
-        //slopeAdjustedTravelDirection = new Vector3(travelDirection.x, slopeDirection.y * facingSlopeDot * velocity, travelDirection.z);
         velocity += speedUpAmount; //speed up amount based on board rotation towards slope
         velocity -= slowDownAmount; // speed down amount based on board rotation towards velocity
-
-        //if (velocity < 0)
-          //  velocity = 0;
 
         Vector3 oldPosition = transform.position;
         transform.position = hit.point + transform.up;
         travelDirection = (transform.position - oldPosition).normalized;
-        //transform.position = new Vector3(transform.position.x, slopeAdjustedTravelDirection.y, transform.position.z);
     }
 
     float SpeedUp()
@@ -80,6 +75,7 @@ public class TheFuskestController : MonoBehaviour
     void RotateBoard()
     {
         Vector3 eulerAngleVelocity = new Vector3(0f, horizontalInput * boardRotationSpeedMultiplier * Time.deltaTime, 0f);
+        //eulerAngleVelocity = new Vector3()
         transform.rotation = Quaternion.Euler(transform.rotation.eulerAngles + eulerAngleVelocity);
         boardDirection = transform.forward;
     }

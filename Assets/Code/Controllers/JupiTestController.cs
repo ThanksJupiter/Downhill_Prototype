@@ -2,213 +2,139 @@
 
 public class JupiTestController : MonoBehaviour
 {
-    #region Properties
+    [Header("Settings")]
     [SerializeField] private float speedMultiplier = 5f;
-    [SerializeField] private float rotationSpeed = 200f;
-    [SerializeField] private float mass = 100f;
-    [SerializeField] private Vector3 acceleration;
+    [SerializeField] private float brakeMultiplier = 5f;
+    [SerializeField] private float boardRotationSpeedMultiplier = 5f;
+    [SerializeField] private float redirectVelocitySpeed = 5f;
+    [SerializeField] private float checkGroundDownDistance = 1.2f;
 
-    [SerializeField] private float tiltFloat;
-    [SerializeField] private float maxVelocity = 50f;
-    [SerializeField] private float gravity = -9.82f;
-    [SerializeField] private float checkGroundDistance = 1f;
-    [SerializeField] private float friction;
+    [Header("Input")]
+    [SerializeField] private float horizontalInput;
 
-    [SerializeField] private Vector3 velocity;
-    [SerializeField] private float velocityMagnitude;
-    [SerializeField] private Vector3 lastFrameVelocity;
+    [Header("Player stats")]
+    [SerializeField] private float velocity;
+    [SerializeField] private Vector3 boardDirection;
+    [SerializeField] private float facingSlopeDot;
+    [SerializeField] private float facingVelocityDot;
 
-    [SerializeField] private Vector2 inputVector;
+    [Header("Mountain stats")]
+    [SerializeField] private Vector3 slopeDirection;
 
-    [SerializeField] private Vector3 projectedVector;
-    [SerializeField] private Vector3 desiredTravelDirection;
+    [Header("Travel stats")]
+    public Vector3 travelDirection;
+    [SerializeField] private Vector3 slopeAdjustedTravelDirection;
+    [SerializeField] private float speedUpAmount;
+    [SerializeField] private float slowDownAmount;
 
-    [Range(0, 1)]
-    public float alpha;
+    [Header("Animation")]
+    public Transform playerTransform;
 
-    bool isGrounded;
-    #endregion Properties
+    private RaycastHit hit;
 
-    #region Delegates
-    delegate void OnLandedDelegate();
-    OnLandedDelegate OnLanded;
-
-    delegate void OnLeftGroundDelegate();
-    OnLeftGroundDelegate OnLeftGround;
-
-    private void OnEnable()
+    void Start()
     {
-        OnLanded += BroadcastLanded;
-        OnLeftGround += BroadcastLeftGround;
+        travelDirection = transform.forward;
     }
 
-    private void OnDisable()
-    {
-        OnLanded -= BroadcastLanded;
-        OnLeftGround -= BroadcastLeftGround;
-    }
-    #endregion Delegates
-
-    #region Unity Updates
     void Update()
     {
-        // TODO set tilt float
-        inputVector = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
+        horizontalInput = Input.GetAxis("Horizontal");
 
-        CheckGround();
+        RotateBoard();
+        FindGround();
 
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, -transform.up, out hit, checkGroundDistance))
+        speedUpAmount = SpeedUp();
+        slowDownAmount = SlowDown();
+
+        velocity += speedUpAmount; //speed up amount based on board rotation towards slope
+        velocity -= slowDownAmount; // speed down amount based on board rotation towards velocity
+
+        Vector3 oldPosition = transform.position;
+        transform.position = hit.point + transform.up;
+        travelDirection = (transform.position - oldPosition).normalized;
+    }
+
+    float SpeedUp()
+    {
+        Vector3 flatSlopeDirection = new Vector3(slopeDirection.x, 0f, slopeDirection.z);
+        facingSlopeDot = Vector3.Dot(boardDirection, flatSlopeDirection.normalized);
+
+        return speedMultiplier * facingSlopeDot * Time.deltaTime;
+    }
+
+    float SlowDown()
+    {
+        if (velocity < 0)
+            return 0;
+
+        facingVelocityDot = Vector3.Dot(boardDirection, travelDirection.normalized);
+
+        return brakeMultiplier * (1 - facingVelocityDot) * Time.deltaTime;
+    }
+
+    void RotateBoard()
+    {
+        float xAngle = Vector3.Angle(transform.forward, slopeDirection);
+        Debug.Log(xAngle);
+        Vector3 eulerAngleVelocity = new Vector3(xAngle, transform.rotation.eulerAngles.y + horizontalInput * boardRotationSpeedMultiplier * Time.deltaTime, 0f);
+        transform.rotation = Quaternion.Euler(eulerAngleVelocity);
+        boardDirection = transform.forward;
+
+        AnimatePlayer(eulerAngleVelocity);
+    }
+
+    void AnimatePlayer(Vector3 eulerAngle)
+    {
+        //         float xAngle = Vector3.Angle(playerTransform.forward, slopeDirection);
+        //         //xAngle = 0;
+        //         xAngle *= facingSlopeDot;
+        //         Debug.Log(xAngle);
+        //         Vector3 eulerAngleVelocity = new Vector3(xAngle, playerTransform.localRotation.eulerAngles.y, playerTransform.localRotation.eulerAngles.z);
+        //         playerTransform.localRotation = Quaternion.Euler(eulerAngleVelocity);
+
+        //playerTransform.localRotation = Quaternion.Euler(travelDirection);
+    }
+
+    private void FindGround()
+    {
+        Vector3 raycastDirection = Vector3.Lerp(travelDirection, boardDirection, redirectVelocitySpeed * Time.deltaTime);
+
+        if (Physics.Raycast(transform.position + raycastDirection.normalized * velocity * Time.deltaTime, -transform.up, out hit, checkGroundDownDistance))
         {
-            if (isGrounded)
-            {
-                //velocity.y = projectedVector.y;
-            }
-            CalculateDesiredTravelDirection(hit);
-            velocityMagnitude = velocity.magnitude;
+            slopeDirection = Vector3.ProjectOnPlane(-transform.up, hit.normal);
+
+            /*
+            // do elsewher
+            Vector3 rightDirection = Vector3.Cross(hit.normal, slopeDirection);
+
+            Vector3 flatSlopeDir = new Vector3(slopeDirection.x, 0f, slopeDirection.z);
+            float rightDot = Vector3.Dot(flatSlopeDir, transform.right);
+
+            travelDirection = Vector3.Lerp(slopeDirection, boardDirection, Mathf.Abs(rightDot));
+
+            DrawDebugLine(rightDirection, 5f, Color.black);
+            float angle = Vector3.Angle(slopeDirection.normalized, travelDirection.normalized);
+            slopeAdjustedTravelDirection = travelDirection;
+            slopeAdjustedTravelDirection.Normalize();
+            slopeAdjustedTravelDirection = Quaternion.AngleAxis(angle * facingSlopeDot, rightDirection) * slopeAdjustedTravelDirection;
+            print(slopeAdjustedTravelDirection.y);*/
         }
-        else
-        {
-            velocity.y += gravity * Time.deltaTime;
-        }
-
-        transform.rotation = CalculateRotation();
     }
 
-    private void FixedUpdate()
+    private void DrawDebugLine(Vector3 direction, float distance, Color color)
     {
-        velocity += CalculateAcceleration();
-        if (isGrounded)
-        {
-            velocity.y = desiredTravelDirection.y;
-        }
-
-        transform.position += velocity * speedMultiplier * Time.fixedDeltaTime;
+        Debug.DrawLine(transform.position, transform.position + direction * distance, color);
     }
-    #endregion Unity Updates
-
-    #region Physics? calculations
-    private Vector3 CalculateVelocity()
-    {
-        return velocity;
-    }
-
-    private Vector3 CalculateAcceleration()
-    {
-        if (isGrounded)
-        {
-            acceleration = desiredTravelDirection / mass;
-            //velocity += desiredTravelDirection / mass;
-        }
-
-        return acceleration;
-    }
-
-    private void CalculateDesiredTravelDirection(RaycastHit hit)
-    {
-        Vector3 normal = hit.normal;
-        //Vector3 point = hit.point;
-
-        Vector3 netForce = -transform.up + normal;
-
-        projectedVector = Vector3.ProjectOnPlane(-transform.up, hit.normal);
-        Vector3 flatProject = projectedVector;
-        flatProject.y = 0;
-
-        float forwardDot = Vector3.Dot(flatProject.normalized, transform.forward);
-        float rightDot = Vector3.Dot(flatProject.normalized, transform.right);
-
-        //desiredTravelDirection = (transform.position + netForce) - transform.position;
-        desiredTravelDirection = Vector3.ProjectOnPlane(-transform.up, normal);
-        desiredTravelDirection = Quaternion.AngleAxis(rightDot * -Mathf.Rad2Deg, hit.normal) * desiredTravelDirection;
-
-        desiredTravelDirection.y *= new Vector3(velocity.x, 0f, velocity.z).magnitude;
-
-        //         Vector3 groundCheckDirection = -transform.up * checkGroundDistance;
-        //         bool facingUp = false;
-        // 
-        //         projectedVector = Vector3.ProjectOnPlane(groundCheckDirection, hit.normal);
-        //         Vector3 flatProject = projectedVector;
-        //         flatProject.y = 0;
-        //         float forwardDot = Vector3.Dot(flatProject.normalized, transform.forward);
-        //         float rightDot = Vector3.Dot(flatProject.normalized, transform.right);
-        // 
-        //         facingUp = forwardDot < 0;
-        // 
-        //         desiredTravelDirection = new Vector3(transform.forward.x * projectedVector.x, projectedVector.y * forwardDot, transform.forward.z * projectedVector.z);
-        //         desiredTravelDirection = Quaternion.AngleAxis(rightDot * -Mathf.Rad2Deg, hit.normal) * desiredTravelDirection;
-        // 
-        //         if (facingUp)
-        //         {
-        //             desiredTravelDirection = Quaternion.AngleAxis(180, projectedVector) * -desiredTravelDirection;
-        //         }
-        // 
-        //         desiredTravelDirection = Vector3.ProjectOnPlane(desiredTravelDirection, hit.normal);
-        //         desiredTravelDirection.Normalize();
-    }
-
-    private Quaternion CalculateRotation()
-    {
-        float theRightDot = Vector3.Dot(transform.right, velocity);
-
-        Vector3 eulerAngleVelocity = new Vector3(0f, inputVector.x * rotationSpeed, 0f);
-        Quaternion deltaRotation = Quaternion.Euler(transform.rotation.eulerAngles + eulerAngleVelocity * Time.deltaTime);
-
-        return deltaRotation;
-    }
-    #endregion Physics? calculations
-
-    #region State checks
-    private void CheckGround()
-    {
-        bool tmpLanded = Physics.Raycast(transform.position, -transform.up, checkGroundDistance);
-
-        if (!isGrounded && tmpLanded)
-        {
-            OnLanded?.Invoke();
-        }
-
-        if (isGrounded && !tmpLanded)
-        {
-            OnLeftGround?.Invoke();
-        }
-
-        isGrounded = tmpLanded;
-    }
-    #endregion State checks
-
-    #region Event broadcasts
-    private void BroadcastLanded()
-    {
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, -transform.up, out hit, checkGroundDistance))
-        {
-            CalculateDesiredTravelDirection(hit);
-            //velocity.y = desiredTravelDirection.y * new Vector3(velocity.x, 0f, velocity.z).magnitude;
-            print("setting velocity.y: " + velocity.y);
-        }
-
-        //print("OnLanded!, velocity: " + velocity + " desired travel dir: " + desiredTravelDirection);
-    }
-
-    private void BroadcastLeftGround()
-    {
-        print("OnLeftGround!, velocity: " + velocity + " desired travel dir: " + desiredTravelDirection);
-    }
-    #endregion Event broadcasts
 
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.blue;
-        Gizmos.DrawLine(transform.position, transform.position + projectedVector * 10f);
-        Gizmos.DrawWireSphere(transform.position + projectedVector * 10f, .2f);
-
         Gizmos.color = Color.green;
-        Gizmos.DrawLine(transform.position, transform.position + desiredTravelDirection * 5f);
-        Gizmos.DrawWireSphere(transform.position + desiredTravelDirection * 5f, .3f);
+        Gizmos.DrawLine(transform.position, transform.position + slopeAdjustedTravelDirection.normalized * 5f);
+        Gizmos.DrawWireSphere(transform.position + slopeAdjustedTravelDirection.normalized * 5f, .4f);
 
-        Gizmos.color = Color.red;
-        Gizmos.DrawLine(transform.position, transform.position + velocity);
-        Gizmos.DrawWireSphere(transform.position + velocity, .4f);
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawLine(transform.position, transform.position + slopeDirection.normalized * 5f);
+        Gizmos.DrawWireSphere(transform.position + slopeDirection.normalized * 5f, .4f);
     }
 }

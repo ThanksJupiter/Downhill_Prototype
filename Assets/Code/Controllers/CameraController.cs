@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class CameraController : MonoBehaviour
 {
-    public TheFuskestController target;
+    public JupiTestController target;
     public Vector3 offset;
     public float yOffset;
     public float zOffset;
