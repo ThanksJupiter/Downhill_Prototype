@@ -7,6 +7,7 @@ public class TotalFuskController : MonoBehaviour
     [SerializeField] private float speedMultiplier = 5f;
     [SerializeField] private float brakeMultiplier = 10f;
     [SerializeField] private float brakeThreshold = .5f;
+    [SerializeField] private float inputBoardRotationSpeed = 100;
     [SerializeField] private float boardRotationSpeed = 1000f;
     [SerializeField] private float travelDirectionLerpSpeed = 200f;
     [SerializeField] private float startTravelThreshold = .2f;
@@ -74,14 +75,6 @@ public class TotalFuskController : MonoBehaviour
 
     void Update()
     {
-        /*if (velocityMagnitude < stationaryVelocityThreshold)
-        {
-            EnterStationaryState();
-        }*//* else if (currentState == State.Stationary && velocityMagnitude > stationaryVelocityThreshold)
-        {
-            currentState = State.Travel;
-        }*/
-
         CheckGround();
 
         inputVector = new Vector3(Input.GetAxis("Horizontal"), 0f, Input.GetAxis("Vertical"));
@@ -103,7 +96,8 @@ public class TotalFuskController : MonoBehaviour
 
         if (inputVector.magnitude >= .8f)
         {
-            boardDirection = inputVector;
+            boardDirection = Vector3.Lerp(boardDirection, inputVector, inputBoardRotationSpeed * Time.deltaTime);
+            //boardDirection = inputVector;
         }
 
         //horizontalTravelDirection = inputVector;
@@ -159,22 +153,23 @@ public class TotalFuskController : MonoBehaviour
 
             faceTowardSlopeAmount = Vector3.Dot(boardDirection.normalized, flatSlopeDirection.normalized);
 
-            if (!isBreaking)
+            isBreaking = true;
+            if (isBreaking)
             {
                 velocityMagnitude += speedMultiplier * Time.deltaTime * faceTowardSlopeAmount;
+                velocityMagnitude -= brakeMultiplier * Time.deltaTime * (1 - faceTowardsTravelDirectionAmount);
                 horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, boardDirection, travelDirectionLerpSpeed * Time.deltaTime);
             }
             else
             {
-                velocityMagnitude -= brakeMultiplier * Time.deltaTime;
-                horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, flatSlopeDirection, travelDirectionLerpSpeed * Time.deltaTime);
+                //horizontalTravelDirection = Vector3.Lerp(horizontalTravelDirection, flatSlopeDirection, travelDirectionLerpSpeed * Time.deltaTime);
             }
         }
 
         if (velocityMagnitude < stationaryVelocityThreshold && Mathf.Abs(faceTowardSlopeAmount) < stationaryVelocityThreshold ) 
         {
-            EnterStationaryState();
-            return;
+            //EnterStationaryState();
+            //return;
         }
 
         transform.position = hit.point + transform.up * 1f;
@@ -187,7 +182,7 @@ public class TotalFuskController : MonoBehaviour
         Vector3 flatSlopeDirection = new Vector3(currentSlopeDirection.x, 0f, currentSlopeDirection.z);
         faceTowardSlopeAmount = Vector3.Dot(boardDirection, flatSlopeDirection);
 
-        if (Mathf.Abs(faceTowardSlopeAmount) > startTravelThreshold && Input.GetButtonDown("Fire1"))
+        if (Mathf.Abs(faceTowardSlopeAmount) > startTravelThreshold)
         {
             EnterTravelState();
         }
@@ -269,5 +264,9 @@ public class TotalFuskController : MonoBehaviour
         Gizmos.color = Color.black;
         Gizmos.DrawLine(transform.position, transform.position + currentSlopeDirection * 5f);
         Gizmos.DrawWireSphere(transform.position + currentSlopeDirection * 5f, .3f);
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(transform.position, transform.position + boardDirection * 5f);
+        Gizmos.DrawWireSphere(transform.position + boardDirection * 5f, .3f);
     }
 }
