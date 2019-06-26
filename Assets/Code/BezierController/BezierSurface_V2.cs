@@ -14,7 +14,7 @@ public class BezierSurface_V2 : MonoBehaviour
     public Mesh mesh;
     public Vector3[] controlVertices;
     [SerializeField] private Vector3 positionVertex;
-    [SerializeField] public Vector3[] vertices;
+    public Vector3[] vertices;
     [SerializeField] private int[] triangles;
 
     public float speed = 5f;
